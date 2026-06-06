@@ -1,6 +1,6 @@
 -- ==============================================================================
--- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Mobile Scale & Planting Patch)
--- Features: Searchable Dropdowns, Auto-Equip Planting, Centered UI
+-- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Mobile Scaling & Auto-Config Patch)
+-- Features: Auto-Save Configs, Responsive Mobile UI, Seed Planner, Anti-Spam
 -- Credits: Dev by zXIJz | UI by zXIJz
 -- ==============================================================================
 
@@ -20,13 +20,53 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local UI_PARENT = RunService:IsStudio() and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
 
 -- ==============================================================================
--- THEMES, SETTINGS & CORE UI HELPERS
+-- CONFIGURATION SYSTEM (Auto Save/Load)
+-- ==============================================================================
+local ConfigFileName = "AxiomHub_SavedConfig.json"
+
+local Library = {
+    ActiveTab = nil,
+    Windows = {},
+    Flags = {
+        ["Screen Notifications"] = true
+    }, 
+    Settings = { ToggleKey = Enum.KeyCode.RightShift, Watermark = true },
+    SessionStart = os.time()
+}
+
+local function LoadConfig()
+    if isfile and isfile(ConfigFileName) and readfile then
+        pcall(function()
+            local savedData = HttpService:JSONDecode(readfile(ConfigFileName))
+            if type(savedData) == "table" then
+                for k, v in pairs(savedData) do
+                    Library.Flags[k] = v
+                end
+            end
+        end)
+    end
+end
+
+local function SaveConfig()
+    if writefile then
+        pcall(function()
+            writefile(ConfigFileName, HttpService:JSONEncode(Library.Flags))
+        end)
+    end
+end
+
+-- Load user settings before building UI
+LoadConfig()
+
+-- ==============================================================================
+-- THEMES & CORE UI HELPERS
 -- ==============================================================================
 local Theme = {
     MainBg      = Color3.fromRGB(12, 12, 12),
@@ -40,16 +80,6 @@ local Theme = {
     Border      = Color3.fromRGB(45, 45, 50),
     Font        = Enum.Font.GothamMedium,
     FontBold    = Enum.Font.GothamBold,
-}
-
-local Library = {
-    ActiveTab = nil,
-    Windows = {},
-    Flags = {
-        ["Screen Notifications"] = true
-    }, 
-    Settings = { ToggleKey = Enum.KeyCode.RightShift, Watermark = true },
-    SessionStart = os.time()
 }
 
 local function Create(className, properties)
@@ -73,7 +103,7 @@ if UI_PARENT:FindFirstChild("AxiomHub_Core") then
 end
 
 local ScreenGui = Create("ScreenGui", { Name = "AxiomHub_Core", Parent = UI_PARENT, ResetOnSpawn = false, IgnoreGuiInset = true })
-local NotifContainer = Create("Frame", { Name = "NotifContainer", Parent = ScreenGui, Size = UDim2.new(0, 300, 1, -40), Position = UDim2.new(1, -320, 0, 20), BackgroundTransparency = 1 })
+local NotifContainer = Create("Frame", { Name = "NotifContainer", Parent = ScreenGui, Size = UDim2.new(0, 300, 1, -40), Position = UDim2.new(1, -320, 0, 20), BackgroundTransparency = 1, ZIndex = 1000 })
 local NotifList = Create("UIListLayout", { Parent = NotifContainer, SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 8) })
 
 local ActiveNotifications = {}
@@ -91,15 +121,15 @@ local function createNotification(title, msg)
         return
     end
     
-    local Toast = Create("Frame", { Size = UDim2.new(1, 0, 0, 60), BackgroundColor3 = Color3.fromRGB(24, 24, 26), BackgroundTransparency = 1, ClipsDescendants = true })
+    local Toast = Create("Frame", { Size = UDim2.new(1, 0, 0, 60), BackgroundColor3 = Color3.fromRGB(24, 24, 26), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 1001 })
     Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Toast })
     local Stroke = Create("UIStroke", { Color = Color3.fromRGB(255, 50, 50), Thickness = 1, Parent = Toast, Transparency = 1 })
     
-    local AccentBar = Create("Frame", { Size = UDim2.new(0, 4, 1, 0), BackgroundColor3 = Color3.fromRGB(255, 50, 50), Parent = Toast, BackgroundTransparency = 1 })
+    local AccentBar = Create("Frame", { Size = UDim2.new(0, 4, 1, 0), BackgroundColor3 = Color3.fromRGB(255, 50, 50), Parent = Toast, BackgroundTransparency = 1, ZIndex = 1002 })
     Create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = AccentBar })
     
-    local tLabel = Create("TextLabel", { Parent = Toast, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 12, 0, 8), BackgroundTransparency = 1, Text = title, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1 })
-    local mLabel = Create("TextLabel", { Parent = Toast, Size = UDim2.new(1, -20, 0, 24), Position = UDim2.new(0, 12, 0, 26), BackgroundTransparency = 1, Text = msg, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(160, 160, 170), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1 })
+    local tLabel = Create("TextLabel", { Parent = Toast, Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 12, 0, 8), BackgroundTransparency = 1, Text = title, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 1002 })
+    local mLabel = Create("TextLabel", { Parent = Toast, Size = UDim2.new(1, -20, 0, 24), Position = UDim2.new(0, 12, 0, 26), BackgroundTransparency = 1, Text = msg, Font = Enum.Font.GothamMedium, TextColor3 = Color3.fromRGB(160, 160, 170), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 1002 })
     
     Toast.Parent = NotifContainer
     
@@ -214,16 +244,11 @@ local RarityColors = {
 }
 
 local RarityList = {
-    {Name = "Common", Rarity = "Common"},
-    {Name = "Uncommon", Rarity = "Uncommon"},
-    {Name = "Rare", Rarity = "Rare"},
-    {Name = "Epic", Rarity = "Epic"},
-    {Name = "Legendary", Rarity = "Legendary"},
-    {Name = "Secret", Rarity = "Secret"},
-    {Name = "Prismatic", Rarity = "Prismatic"},
-    {Name = "Divine", Rarity = "Divine"},
-    {Name = "Exotic", Rarity = "Exotic"},
-    {Name = "Transcendent", Rarity = "Transcendent"}
+    {Name = "Common", Rarity = "Common"}, {Name = "Uncommon", Rarity = "Uncommon"},
+    {Name = "Rare", Rarity = "Rare"}, {Name = "Epic", Rarity = "Epic"},
+    {Name = "Legendary", Rarity = "Legendary"}, {Name = "Secret", Rarity = "Secret"},
+    {Name = "Prismatic", Rarity = "Prismatic"}, {Name = "Divine", Rarity = "Divine"},
+    {Name = "Exotic", Rarity = "Exotic"}, {Name = "Transcendent", Rarity = "Transcendent"}
 }
 
 local SeedData = {
@@ -240,22 +265,14 @@ local SeedData = {
 }
 
 local GearData = {
-    {Name = "Normal Fertilizer", Price = 500000},
-    {Name = "Acid Spray", Price = 1000000},
-    {Name = "Normal Pet Treat", Price = 1000000},
-    {Name = "Wet Spray", Price = 10000000},
-    {Name = "Strong Fertilizer", Price = 50000000},
-    {Name = "Strong Pet Treat", Price = 75000000},
-    {Name = "Frozen Spray", Price = 750000000},
-    {Name = "Autum Spray", Price = 1000000000},
-    {Name = "Void Spray", Price = 10000000000},
-    {Name = "Super Fertilizer", Price = 15000000000},
-    {Name = "Super Pet Treat", Price = 20000000000},
-    {Name = "Radioactive Spray", Price = 100000000000},
-    {Name = "Rainbow Spray", Price = 1000000000000},
-    {Name = "Prismatic Fertilizer", Price = 25000000000000},
-    {Name = "Cosmic Spray", Price = 25000000000000},
-    {Name = "Bubblegum Spray", Price = 250000000000000},
+    {Name = "Normal Fertilizer", Price = 500000}, {Name = "Acid Spray", Price = 1000000},
+    {Name = "Normal Pet Treat", Price = 1000000}, {Name = "Wet Spray", Price = 10000000},
+    {Name = "Strong Fertilizer", Price = 50000000}, {Name = "Strong Pet Treat", Price = 75000000},
+    {Name = "Frozen Spray", Price = 750000000}, {Name = "Autum Spray", Price = 1000000000},
+    {Name = "Void Spray", Price = 10000000000}, {Name = "Super Fertilizer", Price = 15000000000},
+    {Name = "Super Pet Treat", Price = 20000000000}, {Name = "Radioactive Spray", Price = 100000000000},
+    {Name = "Rainbow Spray", Price = 1000000000000}, {Name = "Prismatic Fertilizer", Price = 25000000000000},
+    {Name = "Cosmic Spray", Price = 25000000000000}, {Name = "Bubblegum Spray", Price = 250000000000000},
     {Name = "Fire Spray", Price = 1000000000000000}
 }
 
@@ -349,7 +366,7 @@ end
 local function MakeDraggable(dragArea, target)
     local dragging, dragInput, dragStart, startPos
     dragArea.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true; dragStart = input.Position; startPos = target.Position
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then dragging = false end
@@ -357,7 +374,7 @@ local function MakeDraggable(dragArea, target)
         end
     end)
     dragArea.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
     end)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
@@ -374,58 +391,49 @@ function Library:CreateWindow(config)
     local TitleText = config.Title or "AXIOM"
     local SubText = config.Subtitle or "HUB V1.0"
 
-    -- UI CENTERING FOR MOBILE SUPPORT
-    local MainFrame = Create("Frame", { 
-        Name = "MainFrame", 
-        Parent = ScreenGui, 
-        Size = UDim2.new(0, 650, 0, 450), 
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0), 
-        BackgroundColor3 = Theme.MainBg, 
-        BorderSizePixel = 0, 
-        ClipsDescendants = true 
-    })
+    -- Using Relative Scaling for true mobile support (85% of screen size)
+    local MainFrame = Create("Frame", { Name = "MainFrame", Parent = ScreenGui, Size = UDim2.new(0.85, 0, 0.85, 0), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Theme.MainBg, BorderSizePixel = 0, ClipsDescendants = true })
     Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
     Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = MainFrame })
 
-    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(650, 450), MaxSize = Vector2.new(1200, 800) })
+    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(400, 250), MaxSize = Vector2.new(850, 600) })
 
     local DragHeader = Create("Frame", { Parent = MainFrame, Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, ZIndex = 100 })
     MakeDraggable(DragHeader, MainFrame)
 
     local MinimizeBtn = Create("TextButton", { Parent = DragHeader, Size = UDim2.new(0, 40, 0, 40), Position = UDim2.new(1, -45, 0, 5), BackgroundTransparency = 1, Text = "—", Font = Theme.FontBold, TextColor3 = Theme.TextDim, TextSize = 18, ZIndex = 101 })
 
-    local Sidebar = Create("Frame", { Parent = MainFrame, Size = UDim2.new(0, 220, 1, 0), BackgroundColor3 = Theme.SidebarBg, BorderSizePixel = 0 })
+    local Sidebar = Create("Frame", { Parent = MainFrame, Size = UDim2.new(0, 180, 1, 0), BackgroundColor3 = Theme.SidebarBg, BorderSizePixel = 0 })
     Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = Sidebar }) 
     Create("Frame", { Parent = Sidebar, Size = UDim2.new(0, 10, 1, 0), Position = UDim2.new(1, -10, 0, 0), BackgroundColor3 = Theme.SidebarBg, BorderSizePixel = 0 })
     Create("Frame", { Parent = Sidebar, Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(1, -1, 0, 0), BackgroundColor3 = Theme.Border, BorderSizePixel = 0 })
 
-    local LogoText = Create("TextLabel", { Parent = Sidebar, Size = UDim2.new(1, -40, 0, 30), Position = UDim2.new(0, 20, 0, 25), BackgroundTransparency = 1, Text = TitleText, Font = Theme.FontBold, TextColor3 = Theme.Accent, TextSize = 24, TextXAlignment = Enum.TextXAlignment.Left })
-    local SubLogoText = Create("TextLabel", { Parent = Sidebar, Size = UDim2.new(1, -40, 0, 15), Position = UDim2.new(0, 20, 0, 55), BackgroundTransparency = 1, Text = SubText, Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+    local LogoText = Create("TextLabel", { Parent = Sidebar, Size = UDim2.new(1, -40, 0, 30), Position = UDim2.new(0, 15, 0, 25), BackgroundTransparency = 1, Text = TitleText, Font = Theme.FontBold, TextColor3 = Theme.Accent, TextSize = 22, TextXAlignment = Enum.TextXAlignment.Left })
+    local SubLogoText = Create("TextLabel", { Parent = Sidebar, Size = UDim2.new(1, -40, 0, 15), Position = UDim2.new(0, 15, 0, 55), BackgroundTransparency = 1, Text = SubText, Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left })
 
     local TabContainer = Create("ScrollingFrame", { Parent = Sidebar, Size = UDim2.new(1, 0, 1, -110), Position = UDim2.new(0, 0, 0, 110), BackgroundTransparency = 1, ScrollBarThickness = 0 })
     Create("UIListLayout", { Parent = TabContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4) })
 
-    local ContentArea = Create("Frame", { Parent = MainFrame, Size = UDim2.new(1, -220, 1, 0), Position = UDim2.new(0, 220, 0, 0), BackgroundTransparency = 1 })
+    local ContentArea = Create("Frame", { Parent = MainFrame, Size = UDim2.new(1, -180, 1, 0), Position = UDim2.new(0, 180, 0, 0), BackgroundTransparency = 1 })
 
     local ResizeHandle = Create("TextLabel", { Parent = MainFrame, Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -20, 1, -20), BackgroundTransparency = 1, Text = "◢", TextColor3 = Theme.TextDim, TextSize = 14, ZIndex = 100 })
     local resizing = false; local resizeStartMouse; local resizeStartSize
     
     ResizeHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             resizing = true; resizeStartMouse = input.Position; resizeStartSize = MainFrame.AbsoluteSize
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
-        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - resizeStartMouse
-            local newWidth = math.clamp(resizeStartSize.X + delta.X, 650, 1200) 
-            local newHeight = math.clamp(resizeStartSize.Y + delta.Y, 450, 800)
+            local newWidth = math.clamp(resizeStartSize.X + delta.X, 400, 1200) 
+            local newHeight = math.clamp(resizeStartSize.Y + delta.Y, 250, 800)
             MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
         end
     end)
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then resizing = false end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then resizing = false end
     end)
 
     local FloatingToggle = Create("ImageButton", { Parent = ScreenGui, Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0.5, -25, 0, -60), BackgroundColor3 = Theme.MainBg, Visible = false, ZIndex = 100 })
@@ -467,16 +475,16 @@ function Library:CreateWindow(config)
         local TabBtn = Create("TextButton", { Parent = TabContainer, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Text = "", AutoButtonColor = false })
         local TabIndicator = Create("Frame", { Parent = TabBtn, Size = UDim2.new(0, 4, 0, 20), Position = UDim2.new(0, 0, 0.5, -10), BackgroundColor3 = Theme.Accent, BackgroundTransparency = 1 })
         Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = TabIndicator })
-        local TabLabel = Create("TextLabel", { Parent = TabBtn, Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 30, 0, 0), BackgroundTransparency = 1, Text = TabName, Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left })
+        local TabLabel = Create("TextLabel", { Parent = TabBtn, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 25, 0, 0), BackgroundTransparency = 1, Text = TabName, Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left })
 
         local Page = Create("ScrollingFrame", { Parent = ContentArea, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ScrollBarThickness = 4, ScrollBarImageColor3 = Theme.Border, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false })
-        Create("UIPadding", { Parent = Page, PaddingTop = UDim.new(0, 25), PaddingBottom = UDim.new(0, 25), PaddingLeft = UDim.new(0, 20), PaddingRight = UDim.new(0, 15) })
+        Create("UIPadding", { Parent = Page, PaddingTop = UDim.new(0, 25), PaddingBottom = UDim.new(0, 25), PaddingLeft = UDim.new(0, 15), PaddingRight = UDim.new(0, 10) })
         
-        local LeftCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -10, 1, 0), Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 })
-        local RightCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -10, 1, 0), Position = UDim2.new(0.5, 10, 0, 0), BackgroundTransparency = 1 })
+        local LeftCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -8, 1, 0), Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 })
+        local RightCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -8, 1, 0), Position = UDim2.new(0.5, 8, 0, 0), BackgroundTransparency = 1 })
         
-        local LeftList = Create("UIListLayout", { Parent = LeftCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Top })
-        local RightList = Create("UIListLayout", { Parent = RightCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Top })
+        local LeftList = Create("UIListLayout", { Parent = LeftCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12), VerticalAlignment = Enum.VerticalAlignment.Top })
+        local RightList = Create("UIListLayout", { Parent = RightCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12), VerticalAlignment = Enum.VerticalAlignment.Top })
 
         local function UpdateCanvas()
             local maxH = math.max(LeftList.AbsoluteContentSize.Y, RightList.AbsoluteContentSize.Y)
@@ -566,7 +574,8 @@ function Library:CreateWindow(config)
             function SectionAPI:CreateToggle(opts)
                 local Name = opts.Name or "Toggle"
                 local Flag = opts.Flag or Name
-                local State = opts.Default or Library.Flags[Flag] or false
+                local State = Library.Flags[Flag]
+                if State == nil then State = opts.Default or false end
                 Library.Flags[Flag] = State
 
                 local TogHeight = 40
@@ -598,6 +607,8 @@ function Library:CreateWindow(config)
                     Tween(SwitchKnob, {Position = State and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)}, 0.2)
                     Tween(Title, {TextColor3 = State and Theme.Text or Theme.TextDim}, 0.2)
                     SwitchStroke.Transparency = State and 1 or 0
+                    
+                    SaveConfig()
                     if opts.Callback then opts.Callback(State) end
                 end)
             end
@@ -658,10 +669,12 @@ function Library:CreateWindow(config)
                     local btn = Create("TextButton", { Parent = OptionsFrame, Size = UDim2.new(1, 0, 0, 35), BackgroundTransparency = 1, Text = "", AutoButtonColor = false })
                     ItemButtons[sData.Name] = btn
                     
+                    local isSelected = Library.Flags[Flag][sData.Name] or false
+                    
                     local checkbox = Create("Frame", { Parent = btn, Size = UDim2.new(0, 16, 0, 16), Position = UDim2.new(0, 10, 0.5, -8), BackgroundColor3 = Theme.MainBg })
                     Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = checkbox })
                     Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = checkbox })
-                    local checkFill = Create("Frame", { Parent = checkbox, Size = UDim2.new(1, -4, 1, -4), Position = UDim2.new(0, 2, 0, 2), BackgroundColor3 = Theme.Accent, BackgroundTransparency = 1 })
+                    local checkFill = Create("Frame", { Parent = checkbox, Size = UDim2.new(1, -4, 1, -4), Position = UDim2.new(0, 2, 0, 2), BackgroundColor3 = Theme.Accent, BackgroundTransparency = isSelected and 0 or 1 })
                     Create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = checkFill })
 
                     local nameLabel = Create("TextLabel", { Parent = btn, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 35, 0, 0), BackgroundTransparency = 1, Text = sData.Name, Font = Theme.FontBold, TextColor3 = Color3.fromRGB(255, 255, 255), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left })
@@ -673,11 +686,11 @@ function Library:CreateWindow(config)
                     btn.MouseEnter:Connect(function() Tween(btn, {BackgroundTransparency = 0.8}, 0.1) end)
                     btn.MouseLeave:Connect(function() Tween(btn, {BackgroundTransparency = 1}, 0.1) end)
                     
-                    local isSelected = false
                     btn.MouseButton1Click:Connect(function()
                         isSelected = not isSelected
                         Library.Flags[Flag][sData.Name] = isSelected
                         Tween(checkFill, {BackgroundTransparency = isSelected and 0 or 1}, 0.1)
+                        SaveConfig()
                     end)
                 end
 
@@ -715,7 +728,6 @@ function Library:CreateWindow(config)
         return TabAPI
     end
     
-    MainFrame.Parent = ScreenGui
     return WindowAPI
 end
 
@@ -1012,8 +1024,9 @@ task.spawn(function()
                 end
 
                 for _, tool in ipairs(tools) do
+                    local baseName = tool.Name:gsub(" Seed", ""):gsub(" Shooter", "")
                     for _, data in ipairs(SeedData) do
-                        if string.find(string.lower(tool.Name), string.lower(data.Name)) then
+                        if data.Name == baseName then
                             local isValid = false
                             if modeSpecific and Library.Flags["Specific Plant Targets"] and Library.Flags["Specific Plant Targets"][data.Name] then
                                 isValid = true
