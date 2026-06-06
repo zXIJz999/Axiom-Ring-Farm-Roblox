@@ -1,6 +1,6 @@
 -- ==============================================================================
--- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Cash Verification & Smart Upgrades)
--- Features: Searchable Dropdowns, Auto-Equip Planting, Centered Mobile UI
+-- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Custom Backgrounds & Glass UI)
+-- Features: Custom Image Backgrounds, Searchable Dropdowns, Auto-Equip Planting
 -- Credits: Dev by zXIJz | UI by zXIJz
 -- ==============================================================================
 
@@ -27,14 +27,6 @@ local Mouse = LocalPlayer:GetMouse()
 local UI_PARENT = RunService:IsStudio() and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
 
 -- ==============================================================================
--- SHARED UTILS (For exact price calculations)
--- ==============================================================================
-local SharedUtils = nil
-pcall(function()
-    SharedUtils = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SharedUtils"))
-end)
-
--- ==============================================================================
 -- CONFIGURATION SYSTEM (Auto Save/Load - Crash Proofed)
 -- ==============================================================================
 local ConfigFileName = "AxiomHub_SavedConfig.json"
@@ -43,10 +35,12 @@ local Library = {
     ActiveTab = nil,
     Windows = {},
     Flags = {
-        ["Screen Notifications"] = true
+        ["Screen Notifications"] = true,
+        ["CustomBackground"] = ""
     }, 
     Settings = { ToggleKey = Enum.KeyCode.RightShift, Watermark = true },
-    SessionStart = os.time()
+    SessionStart = os.time(),
+    BgImage = nil
 }
 
 local function LoadConfig()
@@ -403,6 +397,20 @@ function Library:CreateWindow(config)
     local MainFrame = Create("Frame", { Name = "MainFrame", Parent = ScreenGui, Size = UDim2.new(0.85, 0, 0.85, 0), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Theme.MainBg, BorderSizePixel = 0, ClipsDescendants = true })
     Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
     Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = MainFrame })
+    
+    local BgImage = Create("ImageLabel", {
+        Name = "BackgroundImage",
+        Parent = MainFrame,
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Image = "",
+        ImageTransparency = 0.6,
+        ScaleType = Enum.ScaleType.Crop,
+        ZIndex = 0
+    })
+    Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = BgImage })
+    Library.BgImage = BgImage
 
     local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(400, 250), MaxSize = Vector2.new(1200, 800) })
 
@@ -411,9 +419,9 @@ function Library:CreateWindow(config)
 
     local MinimizeBtn = Create("TextButton", { Parent = DragHeader, Size = UDim2.new(0, 40, 0, 40), Position = UDim2.new(1, -45, 0, 5), BackgroundTransparency = 1, Text = "—", Font = Theme.FontBold, TextColor3 = Theme.TextDim, TextSize = 18, ZIndex = 101 })
 
-    local Sidebar = Create("Frame", { Parent = MainFrame, Size = UDim2.new(0, 180, 1, 0), BackgroundColor3 = Theme.SidebarBg, BorderSizePixel = 0 })
+    local Sidebar = Create("Frame", { Parent = MainFrame, Size = UDim2.new(0, 180, 1, 0), BackgroundColor3 = Theme.SidebarBg, BackgroundTransparency = 0.2, BorderSizePixel = 0 })
     Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = Sidebar }) 
-    Create("Frame", { Parent = Sidebar, Size = UDim2.new(0, 10, 1, 0), Position = UDim2.new(1, -10, 0, 0), BackgroundColor3 = Theme.SidebarBg, BorderSizePixel = 0 })
+    Create("Frame", { Parent = Sidebar, Size = UDim2.new(0, 10, 1, 0), Position = UDim2.new(1, -10, 0, 0), BackgroundColor3 = Theme.SidebarBg, BackgroundTransparency = 0.2, BorderSizePixel = 0 })
     Create("Frame", { Parent = Sidebar, Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(1, -1, 0, 0), BackgroundColor3 = Theme.Border, BorderSizePixel = 0 })
 
     local LogoText = Create("TextLabel", { Parent = Sidebar, Size = UDim2.new(1, -40, 0, 30), Position = UDim2.new(0, 15, 0, 25), BackgroundTransparency = 1, Text = TitleText, Font = Theme.FontBold, TextColor3 = Theme.Accent, TextSize = 22, TextXAlignment = Enum.TextXAlignment.Left })
@@ -528,7 +536,7 @@ function Library:CreateWindow(config)
             local elementCount = 0
             local listPadding = 4
 
-            local SectionFrame = Create("Frame", { Parent = targetCol, BackgroundColor3 = Theme.SectionBg, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, currentHeight) })
+            local SectionFrame = Create("Frame", { Parent = targetCol, BackgroundColor3 = Theme.SectionBg, BackgroundTransparency = 0.3, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, currentHeight) })
             Create("UICorner", { CornerRadius = UDim.new(0, 8), Parent = SectionFrame })
             Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = SectionFrame })
 
@@ -634,6 +642,32 @@ function Library:CreateWindow(config)
                 Button.MouseButton1Click:Connect(Callback)
             end
 
+            function SectionAPI:CreateTextBox(opts)
+                local Name = opts.Name or "TextBox"
+                local Flag = opts.Flag or Name
+                local Placeholder = opts.Placeholder or ""
+                local Callback = opts.Callback or function() end
+                local State = Library.Flags[Flag]
+                if State == nil then State = "" end
+                Library.Flags[Flag] = State
+
+                local BoxHeight = 55
+                AddElementHeight(BoxHeight)
+
+                local BoxFrame = Create("Frame", { Parent = SectionContent, Size = UDim2.new(1, 0, 0, BoxHeight), BackgroundTransparency = 1 })
+                local Title = Create("TextLabel", { Parent = BoxFrame, Size = UDim2.new(1, -24, 0, 15), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, Text = Name, Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
+                
+                local InputBox = Create("TextBox", { Parent = BoxFrame, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.new(0, 12, 0, 20), BackgroundColor3 = Theme.ElementBg, Text = State, PlaceholderText = Placeholder, TextColor3 = Theme.Text, Font = Theme.FontBold, TextSize = 13, ClearTextOnFocus = false })
+                Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = InputBox })
+                Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = InputBox })
+
+                InputBox.FocusLost:Connect(function()
+                    Library.Flags[Flag] = InputBox.Text
+                    SaveConfig()
+                    Callback(InputBox.Text)
+                end)
+            end
+
             function SectionAPI:CreateMultiSelect(opts)
                 local Name = opts.Name or "Multi Select"
                 local Flag = opts.Flag or Name
@@ -704,7 +738,6 @@ function Library:CreateWindow(config)
 
                 if SearchBox then
                     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-                        -- Crash-Proof plain-text search logic
                         local q = string.lower(SearchBox.Text)
                         for itemName, btn in pairs(ItemButtons) do
                             if q == "" or string.find(string.lower(itemName), q, 1, true) then
@@ -735,6 +768,13 @@ function Library:CreateWindow(config)
             return SectionAPI
         end
         return TabAPI
+    end
+    
+    -- Load Custom Background on Boot
+    if Library.Flags["CustomBackground"] and Library.Flags["CustomBackground"] ~= "" then
+        local id = Library.Flags["CustomBackground"]
+        if not string.find(id, "rbxassetid://") then id = "rbxassetid://" .. id end
+        Library.BgImage.Image = id
     end
     
     return WindowAPI
@@ -810,6 +850,42 @@ local CashLbl = GameSec:CreateLabel("Cash: Scanning...")
 local CropsLbl = GameSec:CreateLabel("Planted Crops: Scanning...")
 
 -- ====== SETTINGS TAB ======
+local AppearanceSection = SettingsTab:CreateSection("UI Background")
+
+AppearanceSection:CreateButton({ 
+    Name = "Default Background (None)", 
+    Callback = function() 
+        Library.Flags["CustomBackground"] = ""
+        SaveConfig()
+        if Library.BgImage then Library.BgImage.Image = "" end
+    end 
+})
+
+AppearanceSection:CreateButton({ 
+    Name = "Emilia Preset", 
+    Callback = function() 
+        local id = "rbxassetid://126923601510884"
+        Library.Flags["CustomBackground"] = id
+        SaveConfig()
+        if Library.BgImage then Library.BgImage.Image = id end
+    end 
+})
+
+AppearanceSection:CreateTextBox({
+    Name = "Custom Background ID",
+    Flag = "CustomBackground",
+    Placeholder = "Enter Asset ID (e.g. 126923601510884)",
+    Callback = function(val)
+        local id = val
+        if id ~= "" and not string.find(id, "rbxassetid://") then
+            id = "rbxassetid://" .. id
+        end
+        Library.Flags["CustomBackground"] = id
+        SaveConfig()
+        if Library.BgImage then Library.BgImage.Image = id end
+    end
+})
+
 local AlertSection = SettingsTab:CreateSection("Logs & Alerts")
 AlertSection:CreateToggle({ Name = "Screen Notifications", Default = true })
 
@@ -900,7 +976,8 @@ task.spawn(function()
             else
                 local seedRoller = cachedPlot:FindFirstChild("SeedRoller")
                 local targetFoundOnStand = false
-                
+                local cash = getPlayerCash()
+
                 if seedRoller then
                     pcall(function()
                         for standNum = 1, 6 do
@@ -915,21 +992,35 @@ task.spawn(function()
                                         local vDist = math.abs(objPos.Y - standPos.Y)
                                         
                                         if hDist <= 4.5 and vDist <= 15 and selectedTargets[obj.Name] then
-                                            targetFoundOnStand = true
-                                            local oldCash = getPlayerCash()
-                                            
-                                            local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-                                            if prompt then
-                                                safeFirePrompt(prompt)
-                                            else
-                                                BuySeedEvent:FireServer(standNum, true)
+                                            local price = 0
+                                            local foundPrice = false
+                                            for _, desc in safeIpairs(obj:GetDescendants()) do
+                                                if desc:IsA("TextLabel") and desc.Text:find("%$") then
+                                                    local match = desc.Text:match("%$([%d%.%a,]+)")
+                                                    if match then 
+                                                        price = parsePriceString(match) 
+                                                        foundPrice = true
+                                                    end
+                                                end
                                             end
                                             
-                                            task.wait(0.3)
-                                            if getPlayerCash() < oldCash then
-                                                createNotification("Seed Purchased", "Acquired: " .. tostring(obj.Name))
+                                            if not foundPrice or cash >= price then
+                                                targetFoundOnStand = true
+                                                local oldCash = getPlayerCash()
+                                                
+                                                local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                                if prompt then
+                                                    safeFirePrompt(prompt)
+                                                else
+                                                    BuySeedEvent:FireServer(standNum, true)
+                                                end
+                                                
+                                                task.wait(0.3)
+                                                if getPlayerCash() < oldCash then
+                                                    createNotification("Seed Purchased", "Acquired: " .. tostring(obj.Name))
+                                                end
+                                                break
                                             end
-                                            break
                                         end
                                     end
                                 end
@@ -1032,6 +1123,7 @@ task.spawn(function()
                     local tName = string.lower(tool.Name)
                     for _, data in ipairs(SeedData) do
                         local dName = string.lower(data.Name)
+                        -- Added start anchor (^) to prevent substring overlap
                         if string.find(tName, "^" .. dName) then
                             local isValid = false
                             if modeSpecific and Library.Flags["Specific Plant Targets"] and Library.Flags["Specific Plant Targets"][data.Name] then
@@ -1112,7 +1204,6 @@ task.spawn(function()
                                             UpgradePlantEvent:InvokeServer(dirt)
                                             task.wait(0.1)
                                             
-                                            -- If cash didn't drain, we likely failed server verification, wait a bit
                                             if getPlayerCash() >= oldCash then
                                                 task.wait(0.5)
                                             end
