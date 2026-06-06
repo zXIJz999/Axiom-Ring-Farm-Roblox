@@ -1,6 +1,6 @@
 -- ==============================================================================
--- AXIOM HUB UI FRAMEWORK - FINAL BUILD (3D Cylinder Floor Patch)
--- Features: Floating UI Toggle, Anti-Spam Gear, Iron-Clad Seed Roller
+-- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Mobile Scaling & Plant Check Patch)
+-- Features: Viewport UIScaling, Occupied Dirt Failsafes, Section Organization
 -- Credits: Dev by zXIJz | UI by zXIJz
 -- ==============================================================================
 
@@ -76,8 +76,20 @@ local ScreenGui = Create("ScreenGui", { Name = "AxiomHub_Core", Parent = UI_PARE
 local NotifContainer = Create("Frame", { Name = "NotifContainer", Parent = ScreenGui, Size = UDim2.new(0, 300, 1, -40), Position = UDim2.new(1, -320, 0, 20), BackgroundTransparency = 1 })
 local NotifList = Create("UIListLayout", { Parent = NotifContainer, SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Bottom, Padding = UDim.new(0, 8) })
 
+local ActiveNotifications = {}
+
 local function createNotification(title, msg)
     if not Library.Flags["Screen Notifications"] then return end
+    
+    local notifKey = title .. "|" .. msg
+    local existing = ActiveNotifications[notifKey]
+    
+    if existing and not existing.Fading then
+        existing.Count = existing.Count + 1
+        existing.MsgLabel.Text = msg .. " (x" .. existing.Count .. ")"
+        existing.Expiry = os.clock() + 3.5
+        return
+    end
     
     local Toast = Create("Frame", { Size = UDim2.new(1, 0, 0, 60), BackgroundColor3 = Color3.fromRGB(24, 24, 26), BackgroundTransparency = 1, ClipsDescendants = true })
     Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = Toast })
@@ -97,15 +109,39 @@ local function createNotification(title, msg)
     Tween(tLabel, {TextTransparency = 0}, 0.2)
     Tween(mLabel, {TextTransparency = 0}, 0.2)
     
-    task.delay(3.5, function()
-        Tween(Toast, {BackgroundTransparency = 1}, 0.2)
-        Tween(Stroke, {Transparency = 1}, 0.2)
-        Tween(AccentBar, {BackgroundTransparency = 1}, 0.2)
-        Tween(tLabel, {TextTransparency = 1}, 0.2)
-        local t = Tween(mLabel, {TextTransparency = 1}, 0.2)
-        t.Completed:Connect(function() Toast:Destroy() end)
-    end)
+    ActiveNotifications[notifKey] = {
+        Frame = Toast,
+        Stroke = Stroke,
+        Accent = AccentBar,
+        TitleLabel = tLabel,
+        MsgLabel = mLabel,
+        Count = 1,
+        Expiry = os.clock() + 3.5,
+        Fading = false
+    }
 end
+
+task.spawn(function()
+    while not isUnloaded do
+        local currentTime = os.clock()
+        for key, notif in pairs(ActiveNotifications) do
+            if currentTime >= notif.Expiry and not notif.Fading then
+                notif.Fading = true
+                Tween(notif.Frame, {BackgroundTransparency = 1}, 0.2)
+                Tween(notif.Stroke, {Transparency = 1}, 0.2)
+                Tween(notif.Accent, {BackgroundTransparency = 1}, 0.2)
+                Tween(notif.TitleLabel, {TextTransparency = 1}, 0.2)
+                local fadeOut = Tween(notif.MsgLabel, {TextTransparency = 1}, 0.2)
+                
+                fadeOut.Completed:Connect(function()
+                    if notif.Frame then notif.Frame:Destroy() end
+                    ActiveNotifications[key] = nil
+                end)
+            end
+        end
+        task.wait(0.1)
+    end
+end)
 
 -- ==============================================================================
 -- GAME REMOTES & VARIABLES
@@ -119,6 +155,8 @@ local UpgradeFarmEvent = Remotes:WaitForChild("UpgradeFarm")
 local BuySeedEvent = Remotes:WaitForChild("BuySeed")
 local SellCratesEvent = Remotes:WaitForChild("SellCrates")
 local RollSeedsEvent = Remotes:WaitForChild("RollSeeds")
+local PlantSeedEvent = Remotes:WaitForChild("PlantSeed")
+local UpgradePlantEvent = Remotes:WaitForChild("UpgradePlant")
 
 local GearTransactionEvent = Remotes:WaitForChild("Gear"):WaitForChild("Transaction")
 local EggTransactionEvent = Remotes:FindFirstChild("Egg") and Remotes.Egg:FindFirstChild("Transaction") or Remotes:FindFirstChild("BuyEgg")
@@ -175,6 +213,19 @@ local RarityColors = {
     })
 }
 
+local RarityList = {
+    {Name = "Common", Rarity = "Common"},
+    {Name = "Uncommon", Rarity = "Uncommon"},
+    {Name = "Rare", Rarity = "Rare"},
+    {Name = "Epic", Rarity = "Epic"},
+    {Name = "Legendary", Rarity = "Legendary"},
+    {Name = "Secret", Rarity = "Secret"},
+    {Name = "Prismatic", Rarity = "Prismatic"},
+    {Name = "Divine", Rarity = "Divine"},
+    {Name = "Exotic", Rarity = "Exotic"},
+    {Name = "Transcendent", Rarity = "Transcendent"}
+}
+
 local SeedData = {
     {Name = "Carrot", Rarity = "Common", Rank = 1}, {Name = "Beetroot", Rarity = "Common", Rank = 2}, {Name = "Pumpkin", Rarity = "Common", Rank = 3},
     {Name = "Wheat", Rarity = "Uncommon", Rank = 4}, {Name = "Melon", Rarity = "Uncommon", Rank = 5}, {Name = "Onion", Rarity = "Uncommon", Rank = 6}, {Name = "Cantaloupe", Rarity = "Uncommon", Rank = 7}, {Name = "Watermelon", Rarity = "Uncommon", Rank = 8},
@@ -209,7 +260,7 @@ local GearData = {
 }
 
 -- ==============================================================================
--- HELPER FUNCTIONS
+-- LOGIC HELPER FUNCTIONS
 -- ==============================================================================
 local function safeIpairs(t)
     if type(t) == "table" then return ipairs(t) end
@@ -323,11 +374,30 @@ function Library:CreateWindow(config)
     local TitleText = config.Title or "AXIOM"
     local SubText = config.Subtitle or "HUB V1.0"
 
-    local MainFrame = Create("Frame", { Name = "MainFrame", Parent = ScreenGui, Size = UDim2.new(0, 850, 0, 600), Position = UDim2.new(0.5, -425, 0.5, -300), BackgroundColor3 = Theme.MainBg, BorderSizePixel = 0, ClipsDescendants = true })
+    -- DYNAMIC UI SCALING FOR MOBILE / SMALL SCREENS
+    local vp = workspace.CurrentCamera.ViewportSize
+    local isMobile = vp.Y < 600 or vp.X < 800
+    local baseW, baseH = 850, 600
+    local minW, minH = isMobile and 400 or 650, isMobile and 300 or 450
+
+    local MainFrame = Create("Frame", { Name = "MainFrame", Parent = ScreenGui, Size = UDim2.new(0, baseW, 0, baseH), Position = UDim2.new(0.5, -baseW/2, 0.5, -baseH/2), BackgroundColor3 = Theme.MainBg, BorderSizePixel = 0, ClipsDescendants = true })
     Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
     Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = MainFrame })
 
-    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(650, 450), MaxSize = Vector2.new(1200, 800) })
+    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(minW, minH), MaxSize = Vector2.new(1200, 800) })
+
+    -- UISCALE ENGINE
+    local UIScale = Create("UIScale", { Parent = MainFrame })
+    local function UpdateScale()
+        local currentVp = workspace.CurrentCamera.ViewportSize
+        if currentVp.X < baseW or currentVp.Y < baseH then
+            UIScale.Scale = math.clamp(math.min(currentVp.X / baseW, currentVp.Y / baseH) * 0.95, 0.5, 1)
+        else
+            UIScale.Scale = 1
+        end
+    end
+    UpdateScale()
+    workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateScale)
 
     local DragHeader = Create("Frame", { Parent = MainFrame, Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, ZIndex = 100 })
     MakeDraggable(DragHeader, MainFrame)
@@ -358,8 +428,8 @@ function Library:CreateWindow(config)
     UserInputService.InputChanged:Connect(function(input)
         if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - resizeStartMouse
-            local newWidth = math.clamp(resizeStartSize.X + delta.X, 650, 1200) 
-            local newHeight = math.clamp(resizeStartSize.Y + delta.Y, 450, 800)
+            local newWidth = math.clamp(resizeStartSize.X + delta.X, minW, 1200) 
+            local newHeight = math.clamp(resizeStartSize.Y + delta.Y, minH, 800)
             MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
         end
     end)
@@ -522,6 +592,15 @@ function Library:CreateWindow(config)
                 Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = SwitchKnob })
 
                 SwitchBtn.MouseButton1Click:Connect(function()
+                    if opts.Exclusions then
+                        for _, exc in ipairs(opts.Exclusions) do
+                            if Library.Flags[exc] then
+                                createNotification("Action Blocked", "Please disable '" .. exc .. "' first.")
+                                return
+                            end
+                        end
+                    end
+
                     State = not State
                     Library.Flags[Flag] = State
                     Tween(SwitchBtn, {BackgroundColor3 = State and Theme.Accent or Theme.ElementBg}, 0.2)
@@ -549,6 +628,7 @@ function Library:CreateWindow(config)
                 local Name = opts.Name or "Multi Select"
                 local Flag = opts.Flag or Name
                 local ItemList = opts.Items or SeedData
+                local isSearchable = opts.Searchable
                 local Dropped = false
                 Library.Flags[Flag] = Library.Flags[Flag] or {}
 
@@ -564,13 +644,28 @@ function Library:CreateWindow(config)
                 local SelectedText = Create("TextLabel", { Parent = DropBtn, Size = UDim2.new(1, -30, 1, 0), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, Text = Name, Font = Theme.FontBold, TextColor3 = Theme.Text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left })
                 local Icon = Create("TextLabel", { Parent = DropBtn, Size = UDim2.new(0, 20, 1, 0), Position = UDim2.new(1, -30, 0, 0), BackgroundTransparency = 1, Text = "▼", Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 11 })
 
-                local OptionsFrame = Create("ScrollingFrame", { Parent = DropContainer, Size = UDim2.new(1, -24, 0, 0), Position = UDim2.new(0, 12, 0, 40), BackgroundColor3 = Theme.ElementBg, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, #ItemList * 35) })
+                local OptionsYOffset = 40
+                local ExpandAmount = 200
+                local SearchBox = nil
+
+                if isSearchable then
+                    OptionsYOffset = 75
+                    ExpandAmount = 235
+                    SearchBox = Create("TextBox", { Parent = DropContainer, Size = UDim2.new(1, -24, 0, 30), Position = UDim2.new(0, 12, 0, 40), BackgroundColor3 = Theme.MainBg, Text = "", PlaceholderText = "Search...", TextColor3 = Theme.Text, Font = Theme.Font, TextSize = 13 })
+                    Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = SearchBox })
+                    Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = SearchBox })
+                end
+
+                local OptionsFrame = Create("ScrollingFrame", { Parent = DropContainer, Size = UDim2.new(1, -24, 0, 0), Position = UDim2.new(0, 12, 0, OptionsYOffset), BackgroundColor3 = Theme.ElementBg, BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(0, 0, 0, #ItemList * 35) })
                 Create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = OptionsFrame })
                 Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = OptionsFrame })
                 Create("UIListLayout", { Parent = OptionsFrame })
 
+                local ItemButtons = {}
+
                 for _, sData in ipairs(ItemList) do
                     local btn = Create("TextButton", { Parent = OptionsFrame, Size = UDim2.new(1, 0, 0, 35), BackgroundTransparency = 1, Text = "", AutoButtonColor = false })
+                    ItemButtons[sData.Name] = btn
                     
                     local checkbox = Create("Frame", { Parent = btn, Size = UDim2.new(0, 16, 0, 16), Position = UDim2.new(0, 10, 0.5, -8), BackgroundColor3 = Theme.MainBg })
                     Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = checkbox })
@@ -595,15 +690,31 @@ function Library:CreateWindow(config)
                     end)
                 end
 
+                if SearchBox then
+                    SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+                        local q = string.lower(SearchBox.Text)
+                        local visCount = 0
+                        for itemName, btn in pairs(ItemButtons) do
+                            if q == "" or string.find(string.lower(itemName), q) then
+                                btn.Visible = true
+                                visCount = visCount + 1
+                            else
+                                btn.Visible = false
+                            end
+                        end
+                        OptionsFrame.CanvasSize = UDim2.new(0, 0, 0, visCount * 35)
+                    end)
+                end
+
                 DropBtn.MouseButton1Click:Connect(function()
                     Dropped = not Dropped
                     if Dropped then
-                        ModifyRawHeight(200)
-                        Tween(DropContainer, {Size = UDim2.new(1, 0, 0, DropBaseHeight + 200)}, 0.2)
-                        Tween(OptionsFrame, {Size = UDim2.new(1, -24, 0, 195)}, 0.2)
+                        ModifyRawHeight(ExpandAmount)
+                        Tween(DropContainer, {Size = UDim2.new(1, 0, 0, DropBaseHeight + ExpandAmount)}, 0.2)
+                        Tween(OptionsFrame, {Size = UDim2.new(1, -24, 0, ExpandAmount - (isSearchable and 40 or 5))}, 0.2)
                         Tween(Icon, {Rotation = 180}, 0.2)
                     else
-                        ModifyRawHeight(-200)
+                        ModifyRawHeight(-ExpandAmount)
                         Tween(DropContainer, {Size = UDim2.new(1, 0, 0, DropBaseHeight)}, 0.2)
                         Tween(OptionsFrame, {Size = UDim2.new(1, -24, 0, 0)}, 0.2)
                         Tween(Icon, {Rotation = 0}, 0.2)
@@ -633,10 +744,18 @@ local InfoTab    = Window:CreateTab("Information")
 local SettingsTab= Window:CreateTab("Settings")
 
 -- ====== MAIN AUTO TAB ======
+local SellSection = MainTab:CreateSection("Auto Sell")
+SellSection:CreateToggle({ Name = "Auto Sell All Crops" })
+
 local FarmSection = MainTab:CreateSection("Farming Automation")
-FarmSection:CreateToggle({ Name = "Auto Sell" })
-FarmSection:CreateToggle({ Name = "Auto Place Best Plant" }) 
-FarmSection:CreateToggle({ Name = "Auto Upgrade Plant" }) 
+FarmSection:CreateMultiSelect({ Name = "Plant Filter: Specific Seed", Flag = "Specific Plant Targets", Items = SeedData, Searchable = true })
+FarmSection:CreateToggle({ Name = "Auto Place (By Specific Seed)", Exclusions = {"Auto Place (By Rarity)"} })
+
+FarmSection:CreateMultiSelect({ Name = "Plant Filter: Rarity", Flag = "Rarity Plant Targets", Items = RarityList })
+FarmSection:CreateToggle({ Name = "Auto Place (By Rarity)", Exclusions = {"Auto Place (By Specific Seed)"} })
+
+local UpgradeSection = MainTab:CreateSection("Auto Upgrade")
+UpgradeSection:CreateToggle({ Name = "Auto Upgrade Plant" }) 
 
 local EnvSection = MainTab:CreateSection("Environment")
 EnvSection:CreateToggle({ Name = "Auto Use Fertiliser" }) 
@@ -661,12 +780,12 @@ AutoBuySec:CreateToggle({ Name = "Auto Buy Plot" })
 AutoBuySec:CreateToggle({ Name = "Auto Buy Egg (Epic)" }) 
 
 local GearShopSec = ShopTab:CreateSection("Gear Automation")
-GearShopSec:CreateMultiSelect({ Name = "Select Target Gear", Flag = "Target Gear List", Items = GearData })
+GearShopSec:CreateMultiSelect({ Name = "Select Target Gear", Flag = "Target Gear List", Items = GearData, Searchable = true })
 GearShopSec:CreateToggle({ Name = "Auto Buy Selected Gear" })
 
 -- ====== SEEDS & ROLLS TAB ======
 local SeedSection = SeedsTab:CreateSection("Seed Manager")
-SeedSection:CreateMultiSelect({ Name = "Select Target Seeds to Roll", Flag = "Target Seeds List", Items = SeedData })
+SeedSection:CreateMultiSelect({ Name = "Select Target Seeds to Roll", Flag = "Target Seeds List", Items = SeedData, Searchable = true })
 SeedSection:CreateToggle({ Name = "Auto Roll & Buy Targets" })
 SeedSection:CreateToggle({ Name = "Auto Buy ANY Transcendent Seed" })
 
@@ -738,7 +857,7 @@ end)
 
 task.spawn(function()
     while not isUnloaded do
-        if Library.Flags["Auto Sell"] == true then
+        if Library.Flags["Auto Sell All Crops"] == true then
             pcall(function() SellCratesEvent:FireServer() end)
             task.wait(0.5)
         else
@@ -782,7 +901,6 @@ task.spawn(function()
                                     if obj:IsA("Model") and obj.Name ~= LocalPlayer.Name and obj.Name ~= "AxiomHub_Core" then
                                         local objPos = obj:GetPivot().Position
                                         
-                                        -- Calculate 3D Cylinder distance (Restricted vertical distance to prevent floor overlapping)
                                         local hDist = math.sqrt((objPos.X - standPos.X)^2 + (objPos.Z - standPos.Z)^2)
                                         local vDist = math.abs(objPos.Y - standPos.Y)
                                         
@@ -807,7 +925,7 @@ task.spawn(function()
                                                 else
                                                     BuySeedEvent:FireServer(standNum, true)
                                                 end
-                                                createNotification("Seed Purchased", "Successfully acquired: " .. tostring(obj.Name))
+                                                createNotification("Seed Purchased", "Acquired: " .. tostring(obj.Name))
                                                 task.wait(0.2)
                                                 break
                                             end
@@ -909,18 +1027,63 @@ end)
 
 task.spawn(function()
     while not isUnloaded do
-        if Library.Flags["Auto Place Best Plant"] == true and cachedPlot then
+        local modeSpecific = Library.Flags["Auto Place (By Specific Seed)"]
+        local modeRarity = Library.Flags["Auto Place (By Rarity)"]
+        
+        if (modeSpecific or modeRarity) and cachedPlot then
             pcall(function()
                 local bestSeedName = nil
+                local bestTool = nil
                 local highestRank = 0
-                local inventoryFolder = LocalPlayer:FindFirstChild("Inventory") or LocalPlayer:FindFirstChild("PlayerGui")
-                if inventoryFolder then
-                    for _, item in ipairs(inventoryFolder:GetDescendants()) do
-                        if item:IsA("IntValue") and item.Value > 0 then
-                            for _, data in ipairs(SeedData) do
-                                if data.Name == item.Name and data.Rank > highestRank then
-                                    highestRank = data.Rank
-                                    bestSeedName = data.Name
+                
+                local tools = {}
+                for _, obj in ipairs(LocalPlayer.Backpack:GetChildren()) do
+                    if obj:IsA("Tool") then table.insert(tools, obj) end
+                end
+                if LocalPlayer.Character then
+                    for _, obj in ipairs(LocalPlayer.Character:GetChildren()) do
+                        if obj:IsA("Tool") then table.insert(tools, obj) end
+                    end
+                end
+
+                for _, tool in ipairs(tools) do
+                    for _, data in ipairs(SeedData) do
+                        if string.find(string.lower(tool.Name), string.lower(data.Name)) then
+                            local isValid = false
+                            if modeSpecific and Library.Flags["Specific Plant Targets"][data.Name] then
+                                isValid = true
+                            elseif modeRarity and Library.Flags["Rarity Plant Targets"][data.Rarity] then
+                                isValid = true
+                            end
+                            
+                            if isValid and data.Rank > highestRank then
+                                highestRank = data.Rank
+                                bestTool = tool
+                                bestSeedName = data.Name
+                            end
+                        end
+                    end
+                end
+
+                if bestTool and bestSeedName then
+                    if bestTool.Parent ~= LocalPlayer.Character then
+                        LocalPlayer.Character.Humanoid:EquipTool(bestTool)
+                        task.wait(0.2)
+                    end
+                    
+                    for _, plotFolder in ipairs(cachedPlot:GetDescendants()) do
+                        if plotFolder:IsA("Folder") and plotFolder.Name == "FarmPlot" then
+                            for _, child in ipairs(plotFolder:GetChildren()) do
+                                if child:IsA("Model") and child.Name:match("^Plot%d+$") then
+                                    if child:GetAttribute("Unlocked") ~= false then
+                                        local dirt = child:FindFirstChild("Dirt")
+                                        if dirt and not dirt:GetAttribute("PlantName") and not child:FindFirstChild("Plant") then
+                                            PlantSeedEvent:FireServer(dirt)
+                                            createNotification("Seed Planted", "Planted: " .. bestSeedName)
+                                            task.wait(0.1)
+                                            return 
+                                        end
+                                    end
                                 end
                             end
                         end
@@ -928,6 +1091,30 @@ task.spawn(function()
                 end
             end)
             task.wait(1)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+task.spawn(function()
+    while not isUnloaded do
+        if Library.Flags["Auto Upgrade Plant"] == true and cachedPlot then
+            pcall(function()
+                for _, plotFolder in ipairs(cachedPlot:GetDescendants()) do
+                    if plotFolder:IsA("Folder") and plotFolder.Name == "FarmPlot" then
+                        for _, child in ipairs(plotFolder:GetChildren()) do
+                            if child:IsA("Model") and child:FindFirstChild("Plant") then
+                                local dirt = child:FindFirstChild("Dirt")
+                                if dirt then
+                                    UpgradePlantEvent:InvokeServer(dirt)
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(0.5)
         else
             task.wait(0.2)
         end
