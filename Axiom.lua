@@ -1,6 +1,6 @@
 -- ==============================================================================
--- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Mobile Scaling & Plant Check Patch)
--- Features: Viewport UIScaling, Occupied Dirt Failsafes, Section Organization
+-- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Mobile Scale & Planting Patch)
+-- Features: Searchable Dropdowns, Auto-Equip Planting, Centered UI
 -- Credits: Dev by zXIJz | UI by zXIJz
 -- ==============================================================================
 
@@ -374,30 +374,21 @@ function Library:CreateWindow(config)
     local TitleText = config.Title or "AXIOM"
     local SubText = config.Subtitle or "HUB V1.0"
 
-    -- DYNAMIC UI SCALING FOR MOBILE / SMALL SCREENS
-    local vp = workspace.CurrentCamera.ViewportSize
-    local isMobile = vp.Y < 600 or vp.X < 800
-    local baseW, baseH = 850, 600
-    local minW, minH = isMobile and 400 or 650, isMobile and 300 or 450
-
-    local MainFrame = Create("Frame", { Name = "MainFrame", Parent = ScreenGui, Size = UDim2.new(0, baseW, 0, baseH), Position = UDim2.new(0.5, -baseW/2, 0.5, -baseH/2), BackgroundColor3 = Theme.MainBg, BorderSizePixel = 0, ClipsDescendants = true })
+    -- UI CENTERING FOR MOBILE SUPPORT
+    local MainFrame = Create("Frame", { 
+        Name = "MainFrame", 
+        Parent = ScreenGui, 
+        Size = UDim2.new(0, 650, 0, 450), 
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0), 
+        BackgroundColor3 = Theme.MainBg, 
+        BorderSizePixel = 0, 
+        ClipsDescendants = true 
+    })
     Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
     Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = MainFrame })
 
-    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(minW, minH), MaxSize = Vector2.new(1200, 800) })
-
-    -- UISCALE ENGINE
-    local UIScale = Create("UIScale", { Parent = MainFrame })
-    local function UpdateScale()
-        local currentVp = workspace.CurrentCamera.ViewportSize
-        if currentVp.X < baseW or currentVp.Y < baseH then
-            UIScale.Scale = math.clamp(math.min(currentVp.X / baseW, currentVp.Y / baseH) * 0.95, 0.5, 1)
-        else
-            UIScale.Scale = 1
-        end
-    end
-    UpdateScale()
-    workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateScale)
+    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(650, 450), MaxSize = Vector2.new(1200, 800) })
 
     local DragHeader = Create("Frame", { Parent = MainFrame, Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, ZIndex = 100 })
     MakeDraggable(DragHeader, MainFrame)
@@ -428,8 +419,8 @@ function Library:CreateWindow(config)
     UserInputService.InputChanged:Connect(function(input)
         if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - resizeStartMouse
-            local newWidth = math.clamp(resizeStartSize.X + delta.X, minW, 1200) 
-            local newHeight = math.clamp(resizeStartSize.Y + delta.Y, minH, 800)
+            local newWidth = math.clamp(resizeStartSize.X + delta.X, 650, 1200) 
+            local newHeight = math.clamp(resizeStartSize.Y + delta.Y, 450, 800)
             MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
         end
     end)
@@ -693,16 +684,13 @@ function Library:CreateWindow(config)
                 if SearchBox then
                     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
                         local q = string.lower(SearchBox.Text)
-                        local visCount = 0
                         for itemName, btn in pairs(ItemButtons) do
                             if q == "" or string.find(string.lower(itemName), q) then
                                 btn.Visible = true
-                                visCount = visCount + 1
                             else
                                 btn.Visible = false
                             end
                         end
-                        OptionsFrame.CanvasSize = UDim2.new(0, 0, 0, visCount * 35)
                     end)
                 end
 
@@ -1001,29 +989,6 @@ task.spawn(function()
         end
     end
 end)
--- ==============================================================================
--- [ DO NOT EDIT OR TOUCH THIS ] - END OF ENGINE PROTECTION SECTION
--- ==============================================================================
-
-task.spawn(function()
-    while not isUnloaded do
-        if Library.Flags["Auto Buy Plot"] == true and cachedPlot then
-            pcall(function()
-                for _, child in ipairs(cachedPlot:GetDescendants()) do
-                    if child:IsA("Model") and child.Name:match("^Plot%d+$") then
-                        if child:GetAttribute("Unlocked") == false and child:FindFirstChild("Dirt") then
-                            UnlockPlotEvent:FireServer(child.Dirt)
-                            createNotification("Plot Expanded", "Unlocked a new garden tile.")
-                        end
-                    end
-                end
-            end)
-            task.wait(0.5)
-        else
-            task.wait(0.2)
-        end
-    end
-end)
 
 task.spawn(function()
     while not isUnloaded do
@@ -1050,9 +1015,9 @@ task.spawn(function()
                     for _, data in ipairs(SeedData) do
                         if string.find(string.lower(tool.Name), string.lower(data.Name)) then
                             local isValid = false
-                            if modeSpecific and Library.Flags["Specific Plant Targets"][data.Name] then
+                            if modeSpecific and Library.Flags["Specific Plant Targets"] and Library.Flags["Specific Plant Targets"][data.Name] then
                                 isValid = true
-                            elseif modeRarity and Library.Flags["Rarity Plant Targets"][data.Rarity] then
+                            elseif modeRarity and Library.Flags["Rarity Plant Targets"] and Library.Flags["Rarity Plant Targets"][data.Rarity] then
                                 isValid = true
                             end
                             
@@ -1066,24 +1031,21 @@ task.spawn(function()
                 end
 
                 if bestTool and bestSeedName then
-                    if bestTool.Parent ~= LocalPlayer.Character then
-                        LocalPlayer.Character.Humanoid:EquipTool(bestTool)
-                        task.wait(0.2)
-                    end
-                    
-                    for _, plotFolder in ipairs(cachedPlot:GetDescendants()) do
-                        if plotFolder:IsA("Folder") and plotFolder.Name == "FarmPlot" then
-                            for _, child in ipairs(plotFolder:GetChildren()) do
-                                if child:IsA("Model") and child.Name:match("^Plot%d+$") then
-                                    if child:GetAttribute("Unlocked") ~= false then
-                                        local dirt = child:FindFirstChild("Dirt")
-                                        if dirt and not dirt:GetAttribute("PlantName") and not child:FindFirstChild("Plant") then
-                                            PlantSeedEvent:FireServer(dirt)
-                                            createNotification("Seed Planted", "Planted: " .. bestSeedName)
-                                            task.wait(0.1)
-                                            return 
-                                        end
+                    local planted = false
+                    for _, child in ipairs(cachedPlot:GetDescendants()) do
+                        if child:IsA("Model") and child.Name:match("^Plot%d+$") then
+                            if child:GetAttribute("Unlocked") ~= false then
+                                local dirt = child:FindFirstChild("Dirt")
+                                if dirt and dirt:GetAttribute("PlantName") == nil then
+                                    if bestTool.Parent ~= LocalPlayer.Character then
+                                        LocalPlayer.Character.Humanoid:EquipTool(bestTool)
+                                        task.wait(0.2)
                                     end
+                                    PlantSeedEvent:FireServer(dirt)
+                                    createNotification("Seed Planted", "Planted: " .. bestSeedName)
+                                    planted = true
+                                    task.wait(0.2)
+                                    break
                                 end
                             end
                         end
@@ -1096,20 +1058,39 @@ task.spawn(function()
         end
     end
 end)
+-- ==============================================================================
+-- [ DO NOT EDIT OR TOUCH THIS ] - END OF ENGINE PROTECTION SECTION
+-- ==============================================================================
+
+task.spawn(function()
+    while not isUnloaded do
+        if Library.Flags["Auto Buy Plot"] == true and cachedPlot then
+            pcall(function()
+                for _, child in ipairs(cachedPlot:GetDescendants()) do
+                    if child:IsA("Model") and child.Name:match("^Plot%d+$") then
+                        if child:GetAttribute("Unlocked") == false and child:FindFirstChild("Dirt") then
+                            UnlockPlotEvent:FireServer(child.Dirt)
+                            createNotification("Plot Expanded", "Unlocked a new garden tile.")
+                        end
+                    end
+                end
+            end)
+            task.wait(0.5)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
 
 task.spawn(function()
     while not isUnloaded do
         if Library.Flags["Auto Upgrade Plant"] == true and cachedPlot then
             pcall(function()
-                for _, plotFolder in ipairs(cachedPlot:GetDescendants()) do
-                    if plotFolder:IsA("Folder") and plotFolder.Name == "FarmPlot" then
-                        for _, child in ipairs(plotFolder:GetChildren()) do
-                            if child:IsA("Model") and child:FindFirstChild("Plant") then
-                                local dirt = child:FindFirstChild("Dirt")
-                                if dirt then
-                                    UpgradePlantEvent:InvokeServer(dirt)
-                                end
-                            end
+                for _, child in ipairs(cachedPlot:GetDescendants()) do
+                    if child:IsA("Model") and child.Name:match("^Plot%d+$") then
+                        local dirt = child:FindFirstChild("Dirt")
+                        if dirt and dirt:GetAttribute("PlantName") then
+                            UpgradePlantEvent:InvokeServer(dirt)
                         end
                     end
                 end
