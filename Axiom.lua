@@ -1,6 +1,6 @@
 -- ==============================================================================
--- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Mobile Scaling & Auto-Config Patch)
--- Features: Auto-Save Configs, Responsive Mobile UI, Seed Planner, Anti-Spam
+-- AXIOM HUB UI FRAMEWORK - FINAL BUILD (Cash Verification & Smart Upgrades)
+-- Features: Searchable Dropdowns, Auto-Equip Planting, Centered Mobile UI
 -- Credits: Dev by zXIJz | UI by zXIJz
 -- ==============================================================================
 
@@ -27,7 +27,15 @@ local Mouse = LocalPlayer:GetMouse()
 local UI_PARENT = RunService:IsStudio() and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
 
 -- ==============================================================================
--- CONFIGURATION SYSTEM (Auto Save/Load)
+-- SHARED UTILS (For exact price calculations)
+-- ==============================================================================
+local SharedUtils = nil
+pcall(function()
+    SharedUtils = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SharedUtils"))
+end)
+
+-- ==============================================================================
+-- CONFIGURATION SYSTEM (Auto Save/Load - Crash Proofed)
 -- ==============================================================================
 local ConfigFileName = "AxiomHub_SavedConfig.json"
 
@@ -42,12 +50,14 @@ local Library = {
 }
 
 local function LoadConfig()
-    if isfile and isfile(ConfigFileName) and readfile then
+    if type(readfile) == "function" and type(isfile) == "function" then
         pcall(function()
-            local savedData = HttpService:JSONDecode(readfile(ConfigFileName))
-            if type(savedData) == "table" then
-                for k, v in pairs(savedData) do
-                    Library.Flags[k] = v
+            if isfile(ConfigFileName) then
+                local savedData = HttpService:JSONDecode(readfile(ConfigFileName))
+                if type(savedData) == "table" then
+                    for k, v in pairs(savedData) do
+                        Library.Flags[k] = v
+                    end
                 end
             end
         end)
@@ -55,14 +65,13 @@ local function LoadConfig()
 end
 
 local function SaveConfig()
-    if writefile then
+    if type(writefile) == "function" then
         pcall(function()
             writefile(ConfigFileName, HttpService:JSONEncode(Library.Flags))
         end)
     end
 end
 
--- Load user settings before building UI
 LoadConfig()
 
 -- ==============================================================================
@@ -261,7 +270,7 @@ local SeedData = {
     {Name = "Apple", Rarity = "Prismatic", Rank = 37}, {Name = "Duoheart Daisy", Rarity = "Prismatic", Rank = 38}, {Name = "Cherry Blossom", Rarity = "Prismatic", Rank = 39}, {Name = "Galaxy Hibiscus", Rarity = "Prismatic", Rank = 40}, {Name = "Blood Orange", Rarity = "Prismatic", Rank = 41}, {Name = "Pineapple", Rarity = "Prismatic", Rank = 42}, {Name = "Iron Fern", Rarity = "Prismatic", Rank = 43}, {Name = "Cinnamon", Rarity = "Prismatic", Rank = 44}, {Name = "Garlic", Rarity = "Prismatic", Rank = 45}, {Name = "Hex Sprout", Rarity = "Prismatic", Rank = 46}, {Name = "Rush Root", Rarity = "Prismatic", Rank = 47},
     {Name = "Diamond Blossom", Rarity = "Divine", Rank = 48}, {Name = "Golden Apple", Rarity = "Divine", Rank = 49}, {Name = "Pomegranate", Rarity = "Divine", Rank = 50}, {Name = "Horned Melon", Rarity = "Divine", Rank = 51}, {Name = "Admin Bloom", Rarity = "Divine", Rank = 52}, {Name = "Cocoa", Rarity = "Divine", Rank = 53}, {Name = "Crystalberry", Rarity = "Divine", Rank = 54}, {Name = "Dreadcap", Rarity = "Divine", Rank = 55}, {Name = "Compost Hydra", Rarity = "Divine", Rank = 56},
     {Name = "Kiwi", Rarity = "Exotic", Rank = 57}, {Name = "Moonflower", Rarity = "Exotic", Rank = 58}, {Name = "Passion Fruit", Rarity = "Exotic", Rank = 59}, {Name = "Striped Starfruit", Rarity = "Exotic", Rank = 60}, {Name = "Pepper", Rarity = "Exotic", Rank = 61}, {Name = "Heartvine", Rarity = "Exotic", Rank = 62}, {Name = "Truckers Delight", Rarity = "Exotic", Rank = 63}, {Name = "Void Fruit", Rarity = "Exotic", Rank = 64}, {Name = "Elder Dragonroot", Rarity = "Exotic", Rank = 65}, {Name = "Crimson Higanbana", Rarity = "Exotic", Rank = 66}, {Name = "Dragonfruit", Rarity = "Exotic", Rank = 67},
-    {Name = "Garden Devourer", Rarity = "Transcendent", Rank = 68}, {Name = "Papaya", Rarity = "Transcendent", Rank = 69}, {Name = "Durian", Rarity = "Transcendent", Rank = 70}, {Name = "Ghost Pepper", Rarity = "Transcendent", Rank = 71}, {Name = "Ember Fruit", Rarity = "Transcendent", Rank = 72}, {Name = "Queens Blossom", Rarity = "Transcendent", Rank = 73}, {Name = "Heart of Corruption", Rarity = "Transcendent", Rank = 74}, {Name = "Soulbound Orchid", Rarity = "Transcendent", Rank = 75}, {Name = "Garden Golem", Rarity = "Transcendent", Rank = 76}
+    {Name = "Garden Devourer", Rarity = "Transcendent", Rank = 68}, {Name = "Papaya", Rarity = "Transcendent", Rank = 69}, {Name = "Durian", Rarity = "Transcendent", Rank = 70}, {Name = "Ghost Pepper", Rarity = "Transcendent", Rank = 71}, {Name = "Ember Fruit", Rarity = "Transcendent", Rank = 72}, {Name = "Queens Blossom", Rarity = "Transcendent", Rank = 73}, {Name = "Heart of Corruption", Rarity = "Transcendent", Rank = 74}, {Name = "Soulbound Orchid", Rarity = "Transcendent", Rank = 75}, {Name = "Garden Golem", Rarity = "Transcendent", Rank = 76}, {Name = "Aurora Lotus", Rarity = "Transcendent", Rank = 77}
 }
 
 local GearData = {
@@ -391,12 +400,11 @@ function Library:CreateWindow(config)
     local TitleText = config.Title or "AXIOM"
     local SubText = config.Subtitle or "HUB V1.0"
 
-    -- Using Relative Scaling for true mobile support (85% of screen size)
     local MainFrame = Create("Frame", { Name = "MainFrame", Parent = ScreenGui, Size = UDim2.new(0.85, 0, 0.85, 0), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Theme.MainBg, BorderSizePixel = 0, ClipsDescendants = true })
     Create("UICorner", { CornerRadius = UDim.new(0, 10), Parent = MainFrame })
     Create("UIStroke", { Color = Theme.Border, Thickness = 1, Parent = MainFrame })
 
-    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(400, 250), MaxSize = Vector2.new(850, 600) })
+    local SizeConstraint = Create("UISizeConstraint", { Parent = MainFrame, MinSize = Vector2.new(400, 250), MaxSize = Vector2.new(1200, 800) })
 
     local DragHeader = Create("Frame", { Parent = MainFrame, Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, ZIndex = 100 })
     MakeDraggable(DragHeader, MainFrame)
@@ -475,16 +483,16 @@ function Library:CreateWindow(config)
         local TabBtn = Create("TextButton", { Parent = TabContainer, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Text = "", AutoButtonColor = false })
         local TabIndicator = Create("Frame", { Parent = TabBtn, Size = UDim2.new(0, 4, 0, 20), Position = UDim2.new(0, 0, 0.5, -10), BackgroundColor3 = Theme.Accent, BackgroundTransparency = 1 })
         Create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = TabIndicator })
-        local TabLabel = Create("TextLabel", { Parent = TabBtn, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 25, 0, 0), BackgroundTransparency = 1, Text = TabName, Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left })
+        local TabLabel = Create("TextLabel", { Parent = TabBtn, Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 30, 0, 0), BackgroundTransparency = 1, Text = TabName, Font = Theme.Font, TextColor3 = Theme.TextDim, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left })
 
         local Page = Create("ScrollingFrame", { Parent = ContentArea, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ScrollBarThickness = 4, ScrollBarImageColor3 = Theme.Border, CanvasSize = UDim2.new(0, 0, 0, 0), Visible = false })
-        Create("UIPadding", { Parent = Page, PaddingTop = UDim.new(0, 25), PaddingBottom = UDim.new(0, 25), PaddingLeft = UDim.new(0, 15), PaddingRight = UDim.new(0, 10) })
+        Create("UIPadding", { Parent = Page, PaddingTop = UDim.new(0, 25), PaddingBottom = UDim.new(0, 25), PaddingLeft = UDim.new(0, 20), PaddingRight = UDim.new(0, 15) })
         
-        local LeftCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -8, 1, 0), Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 })
-        local RightCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -8, 1, 0), Position = UDim2.new(0.5, 8, 0, 0), BackgroundTransparency = 1 })
+        local LeftCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -10, 1, 0), Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 })
+        local RightCol = Create("Frame", { Parent = Page, Size = UDim2.new(0.5, -10, 1, 0), Position = UDim2.new(0.5, 10, 0, 0), BackgroundTransparency = 1 })
         
-        local LeftList = Create("UIListLayout", { Parent = LeftCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12), VerticalAlignment = Enum.VerticalAlignment.Top })
-        local RightList = Create("UIListLayout", { Parent = RightCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12), VerticalAlignment = Enum.VerticalAlignment.Top })
+        local LeftList = Create("UIListLayout", { Parent = LeftCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Top })
+        local RightList = Create("UIListLayout", { Parent = RightCol, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Top })
 
         local function UpdateCanvas()
             local maxH = math.max(LeftList.AbsoluteContentSize.Y, RightList.AbsoluteContentSize.Y)
@@ -696,9 +704,10 @@ function Library:CreateWindow(config)
 
                 if SearchBox then
                     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+                        -- Crash-Proof plain-text search logic
                         local q = string.lower(SearchBox.Text)
                         for itemName, btn in pairs(ItemButtons) do
-                            if q == "" or string.find(string.lower(itemName), q) then
+                            if q == "" or string.find(string.lower(itemName), q, 1, true) then
                                 btn.Visible = true
                             else
                                 btn.Visible = false
@@ -755,7 +764,9 @@ FarmSection:CreateMultiSelect({ Name = "Plant Filter: Rarity", Flag = "Rarity Pl
 FarmSection:CreateToggle({ Name = "Auto Place (By Rarity)", Exclusions = {"Auto Place (By Specific Seed)"} })
 
 local UpgradeSection = MainTab:CreateSection("Auto Upgrade")
-UpgradeSection:CreateToggle({ Name = "Auto Upgrade Plant" }) 
+UpgradeSection:CreateToggle({ Name = "Auto Upgrade All Plants", Exclusions = {"Auto Upgrade Specific Plants"} })
+UpgradeSection:CreateMultiSelect({ Name = "Upgrade Filter: Specific", Flag = "Specific Upgrade Targets", Items = SeedData, Searchable = true })
+UpgradeSection:CreateToggle({ Name = "Auto Upgrade Specific Plants", Exclusions = {"Auto Upgrade All Plants"} })
 
 local EnvSection = MainTab:CreateSection("Environment")
 EnvSection:CreateToggle({ Name = "Auto Use Fertiliser" }) 
@@ -889,8 +900,7 @@ task.spawn(function()
             else
                 local seedRoller = cachedPlot:FindFirstChild("SeedRoller")
                 local targetFoundOnStand = false
-                local cash = getPlayerCash()
-
+                
                 if seedRoller then
                     pcall(function()
                         for standNum = 1, 6 do
@@ -905,30 +915,21 @@ task.spawn(function()
                                         local vDist = math.abs(objPos.Y - standPos.Y)
                                         
                                         if hDist <= 4.5 and vDist <= 15 and selectedTargets[obj.Name] then
-                                            local price = 0
-                                            local foundPrice = false
-                                            for _, desc in safeIpairs(obj:GetDescendants()) do
-                                                if desc:IsA("TextLabel") and desc.Text:find("%$") then
-                                                    local match = desc.Text:match("%$([%d%.%a,]+)")
-                                                    if match then 
-                                                        price = parsePriceString(match) 
-                                                        foundPrice = true
-                                                    end
-                                                end
+                                            targetFoundOnStand = true
+                                            local oldCash = getPlayerCash()
+                                            
+                                            local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                            if prompt then
+                                                safeFirePrompt(prompt)
+                                            else
+                                                BuySeedEvent:FireServer(standNum, true)
                                             end
                                             
-                                            if not foundPrice or cash >= price then
-                                                targetFoundOnStand = true
-                                                local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-                                                if prompt then
-                                                    safeFirePrompt(prompt)
-                                                else
-                                                    BuySeedEvent:FireServer(standNum, true)
-                                                end
+                                            task.wait(0.3)
+                                            if getPlayerCash() < oldCash then
                                                 createNotification("Seed Purchased", "Acquired: " .. tostring(obj.Name))
-                                                task.wait(0.2)
-                                                break
                                             end
+                                            break
                                         end
                                     end
                                 end
@@ -981,11 +982,15 @@ task.spawn(function()
                                             end
                                         end
                                         if isTranscendent then
+                                            local oldCash = getPlayerCash()
                                             local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
                                             if prompt then safeFirePrompt(prompt)
                                             else BuySeedEvent:FireServer(standNum, true) end
-                                            createNotification("Transcendent Secured!", "Acquired Rare Drop: " .. tostring(obj.Name))
-                                            task.wait(0.2)
+                                            
+                                            task.wait(0.3)
+                                            if getPlayerCash() < oldCash then
+                                                createNotification("Transcendent Secured!", "Acquired Rare Drop: " .. tostring(obj.Name))
+                                            end
                                             break
                                         end
                                     end
@@ -1024,9 +1029,10 @@ task.spawn(function()
                 end
 
                 for _, tool in ipairs(tools) do
-                    local baseName = tool.Name:gsub(" Seed", ""):gsub(" Shooter", "")
+                    local tName = string.lower(tool.Name)
                     for _, data in ipairs(SeedData) do
-                        if data.Name == baseName then
+                        local dName = string.lower(data.Name)
+                        if string.find(tName, "^" .. dName) then
                             local isValid = false
                             if modeSpecific and Library.Flags["Specific Plant Targets"] and Library.Flags["Specific Plant Targets"][data.Name] then
                                 isValid = true
@@ -1044,7 +1050,6 @@ task.spawn(function()
                 end
 
                 if bestTool and bestSeedName then
-                    local planted = false
                     for _, child in ipairs(cachedPlot:GetDescendants()) do
                         if child:IsA("Model") and child.Name:match("^Plot%d+$") then
                             if child:GetAttribute("Unlocked") ~= false then
@@ -1056,9 +1061,8 @@ task.spawn(function()
                                     end
                                     PlantSeedEvent:FireServer(dirt)
                                     createNotification("Seed Planted", "Planted: " .. bestSeedName)
-                                    planted = true
                                     task.wait(0.2)
-                                    break
+                                    return 
                                 end
                             end
                         end
@@ -1066,6 +1070,61 @@ task.spawn(function()
                 end
             end)
             task.wait(1)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+task.spawn(function()
+    while not isUnloaded do
+        local modeAll = Library.Flags["Auto Upgrade All Plants"]
+        local modeSpecific = Library.Flags["Auto Upgrade Specific Plants"]
+        
+        if (modeAll or modeSpecific) and cachedPlot then
+            pcall(function()
+                for _, plotFolder in ipairs(cachedPlot:GetDescendants()) do
+                    if plotFolder:IsA("Folder") and plotFolder.Name == "FarmPlot" then
+                        for _, child in ipairs(plotFolder:GetChildren()) do
+                            if child:IsA("Model") and child:FindFirstChild("Plant") then
+                                local dirt = child:FindFirstChild("Dirt")
+                                if dirt then
+                                    local pName = dirt:GetAttribute("PlantName")
+                                    local pLevel = dirt:GetAttribute("PlantLevel") or 1
+                                    
+                                    local isValid = false
+                                    if modeAll then
+                                        isValid = true
+                                    elseif modeSpecific and pName and Library.Flags["Specific Upgrade Targets"] and Library.Flags["Specific Upgrade Targets"][pName] then
+                                        isValid = true
+                                    end
+                                    
+                                    if isValid then
+                                        local price = 0
+                                        if SharedUtils and type(SharedUtils.CalculateSeedUpgradePrice) == "function" then
+                                            pcall(function()
+                                                price = SharedUtils.CalculateSeedUpgradePrice(pName, pLevel)
+                                            end)
+                                        end
+                                        
+                                        if getPlayerCash() >= price then
+                                            local oldCash = getPlayerCash()
+                                            UpgradePlantEvent:InvokeServer(dirt)
+                                            task.wait(0.1)
+                                            
+                                            -- If cash didn't drain, we likely failed server verification, wait a bit
+                                            if getPlayerCash() >= oldCash then
+                                                task.wait(0.5)
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(0.5)
         else
             task.wait(0.2)
         end
@@ -1084,26 +1143,6 @@ task.spawn(function()
                         if child:GetAttribute("Unlocked") == false and child:FindFirstChild("Dirt") then
                             UnlockPlotEvent:FireServer(child.Dirt)
                             createNotification("Plot Expanded", "Unlocked a new garden tile.")
-                        end
-                    end
-                end
-            end)
-            task.wait(0.5)
-        else
-            task.wait(0.2)
-        end
-    end
-end)
-
-task.spawn(function()
-    while not isUnloaded do
-        if Library.Flags["Auto Upgrade Plant"] == true and cachedPlot then
-            pcall(function()
-                for _, child in ipairs(cachedPlot:GetDescendants()) do
-                    if child:IsA("Model") and child.Name:match("^Plot%d+$") then
-                        local dirt = child:FindFirstChild("Dirt")
-                        if dirt and dirt:GetAttribute("PlantName") then
-                            UpgradePlantEvent:InvokeServer(dirt)
                         end
                     end
                 end
@@ -1168,8 +1207,10 @@ task.spawn(function()
             for _, gData in ipairs(GearData) do
                 if selectedGear[gData.Name] and cash >= gData.Price then
                     task.spawn(function()
-                        local success = pcall(function() GearTransactionEvent:InvokeServer(gData.Name) end)
-                        if success then
+                        local oldCash = getPlayerCash()
+                        pcall(function() GearTransactionEvent:InvokeServer(gData.Name) end)
+                        task.wait(0.3)
+                        if getPlayerCash() < oldCash then
                             createNotification("Gear Purchased", "Bought: " .. gData.Name)
                         end
                     end)
@@ -1186,10 +1227,12 @@ task.spawn(function()
     while not isUnloaded do
         if Library.Flags["Auto Buy Egg (Epic)"] == true then
             task.spawn(function()
-                local success = pcall(function()
+                local oldCash = getPlayerCash()
+                pcall(function()
                     if EggTransactionEvent then EggTransactionEvent:InvokeServer("Epic Egg") end
                 end)
-                if success then
+                task.wait(0.3)
+                if getPlayerCash() < oldCash then
                     createNotification("Egg Obtained", "Successfully purchased Epic Egg")
                 end
             end)
