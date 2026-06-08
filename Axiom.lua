@@ -1,5 +1,5 @@
 -- ==============================================================================
--- AXIOM HUB UI FRAMEWORK - FINAL MASTER BUILD (Draggable Icon Patch)
+-- AXIOM HUB UI FRAMEWORK - FINAL MASTER BUILD (Hierarchical UI Price Scanner)
 -- Features: True Teleport Eggs, Upcycle Replacements, Rarity Sorting
 -- Credits: Dev by zXIJz | UI by zXIJz
 -- ==============================================================================
@@ -22,6 +22,8 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
+
+local queue_on_teleport = queue_on_teleport or (syn and syn.queue_on_teleport) or function() end
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
@@ -69,7 +71,8 @@ local Library = {
         ["Screen Notifications"] = true,
         ["CustomBackground"] = "",
         ["PlantOverrides"] = {},
-        ["Anti-AFK"] = true
+        ["Anti-AFK"] = true,
+        ["AutoExecLoadstring"] = ""
     }, 
     Settings = { ToggleKey = Enum.KeyCode.RightShift, Watermark = true },
     SessionStart = os.time(),
@@ -296,6 +299,40 @@ local function getPlayerPlot()
     return nil
 end
 
+-- Hierarchical Distance UI Scanner
+local function getUpgradePriceIn(parentObj, keyword)
+    if not parentObj then return math.huge end
+    
+    local targetLabel = nil
+    for _, desc in safeIpairs(parentObj:GetDescendants()) do
+        if desc:IsA("TextLabel") and string.find(string.lower(desc.Text), string.lower(keyword)) then
+            targetLabel = desc
+            break
+        end
+    end
+    
+    if targetLabel then
+        local currentParent = targetLabel.Parent
+        while currentParent and currentParent ~= game do
+            for _, siblingDesc in safeIpairs(currentParent:GetChildren()) do
+                if siblingDesc:IsA("TextLabel") and string.find(siblingDesc.Text, "%$") then
+                    local match = string.match(siblingDesc.Text, "%$([%d%.%a,]+)")
+                    if match then return parsePriceString(match) end
+                end
+                for _, deepDesc in safeIpairs(siblingDesc:GetChildren()) do
+                    if deepDesc:IsA("TextLabel") and string.find(deepDesc.Text, "%$") then
+                        local match = string.match(deepDesc.Text, "%$([%d%.%a,]+)")
+                        if match then return parsePriceString(match) end
+                    end
+                end
+            end
+            currentParent = currentParent.Parent
+        end
+    end
+    
+    return math.huge
+end
+
 local function GetPlantRank(pName)
     for _, s in ipairs(SeedData) do
         if s.Name == pName then return s.Rank end
@@ -406,6 +443,15 @@ LocalPlayer.Idled:Connect(function()
         VirtualUser:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
         task.wait(1)
         VirtualUser:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+    end
+end)
+
+-- ==============================================================================
+-- TELEPORT QUEUE ENGINE
+-- ==============================================================================
+LocalPlayer.OnTeleport:Connect(function(teleportState)
+    if Library.Flags["Queue on Teleport / Rejoin"] and Library.Flags["AutoExecLoadstring"] ~= "" then
+        pcall(function() queue_on_teleport(Library.Flags["AutoExecLoadstring"]) end)
     end
 end)
 
@@ -881,6 +927,19 @@ function Library:CreateWindow(config)
                 end)
             end
 
+            function SectionAPI:CreateButton(opts)
+                local Name = opts.Name or "Button"
+                local Callback = opts.Callback or function() end
+                local BtnHeight = 45
+                AddElementHeight(BtnHeight)
+
+                local BtnFrame = Create("Frame", { Parent = SectionContent, Size = UDim2.new(1, 0, 0, BtnHeight), BackgroundTransparency = 1, ZIndex = 2 })
+                local Button = Create("TextButton", { Parent = BtnFrame, Size = UDim2.new(1, -24, 0, 35), Position = UDim2.new(0, 12, 0, 5), BackgroundColor3 = Theme.ElementBg, Text = Name, Font = Theme.FontBold, TextColor3 = Theme.Text, TextSize = 13, AutoButtonColor = false, ZIndex = 2 })
+                Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Button })
+                
+                Button.MouseButton1Click:Connect(Callback)
+            end
+
             function SectionAPI:CreateTextBox(opts)
                 local Name = opts.Name or "TextBox"
                 local Flag = opts.Flag or Name
@@ -1088,19 +1147,6 @@ function Library:CreateWindow(config)
                 return api
             end
             
-            function SectionAPI:CreateButton(opts)
-                local Name = opts.Name or "Button"
-                local Callback = opts.Callback or function() end
-                local BtnHeight = 45
-                AddElementHeight(BtnHeight)
-
-                local BtnFrame = Create("Frame", { Parent = SectionContent, Size = UDim2.new(1, 0, 0, BtnHeight), BackgroundTransparency = 1, ZIndex = 2 })
-                local Button = Create("TextButton", { Parent = BtnFrame, Size = UDim2.new(1, -24, 0, 35), Position = UDim2.new(0, 12, 0, 5), BackgroundColor3 = Theme.ElementBg, Text = Name, Font = Theme.FontBold, TextColor3 = Theme.Text, TextSize = 13, AutoButtonColor = false, ZIndex = 2 })
-                Create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = Button })
-                
-                Button.MouseButton1Click:Connect(Callback)
-            end
-
             return SectionAPI
         end
         return TabAPI
@@ -1288,6 +1334,8 @@ PlayerMods:CreateSlider({Name = "Field of View", Flag = "FOV", Min = 70, Max = 1
 PlayerMods:CreateToggle({Name = "Anti-AFK", Default = true})
 
 local UtilitySec = SettingsTab:CreateSection("Utilities")
+UtilitySec:CreateTextBox({Name = "AutoExec Loadstring", Flag = "AutoExecLoadstring", Placeholder = "loadstring(game:HttpGet('...'))()"})
+UtilitySec:CreateToggle({Name = "Queue on Teleport / Rejoin", Flag = "Queue on Teleport / Rejoin"})
 UtilitySec:CreateButton({Name = "Clear All Notifications", Callback = function() 
     for key, notif in pairs(ActiveNotifications) do
         if notif.Frame then notif.Frame:Destroy() end
@@ -1325,11 +1373,6 @@ PerfSection:CreateToggle({
         end
     end 
 })
-
-PerfSection:CreateButton({ Name = "Unload GUI", Callback = function() 
-    isUnloaded = true 
-    if UI_PARENT:FindFirstChild("AxiomHub_Core") then UI_PARENT.AxiomHub_Core:Destroy() end
-end })
 
 -- ==============================================================================
 -- RUNTIME BACKGROUND ENGINE 
@@ -1396,9 +1439,16 @@ task.spawn(function()
     while not isUnloaded do
         if Library.Flags["Auto Upgrade Seed Luck"] then
             pcall(function()
-                local rsRemotes = ReplicatedStorage:FindFirstChild("Remotes")
-                if rsRemotes and rsRemotes:FindFirstChild("UpgradeSeedLuck") then
-                    rsRemotes.UpgradeSeedLuck:InvokeServer()
+                local price = getUpgradePriceIn(cachedPlot, "Seed Luck")
+                if price == math.huge then
+                    price = getUpgradePriceIn(workspace:FindFirstChild("Map") or workspace, "Seed Luck")
+                end
+                
+                if getPlayerCash() >= price then
+                    local rsRemotes = ReplicatedStorage:FindFirstChild("Remotes")
+                    if rsRemotes and rsRemotes:FindFirstChild("UpgradeSeedLuck") then
+                        rsRemotes.UpgradeSeedLuck:InvokeServer()
+                    end
                 end
             end)
             task.wait(1)
@@ -1414,7 +1464,7 @@ task.spawn(function()
         local upgPower = Library.Flags["Auto Upgrade Sprinkler Power"]
         local activeFloors = Library.Flags["Plot Upg Floors"] or {}
         
-        if (upgYield or upgPower) then
+        if (upgYield or upgPower) and cachedPlot then
             pcall(function()
                 local rsRemotes = ReplicatedStorage:FindFirstChild("Remotes")
                 if rsRemotes and rsRemotes:FindFirstChild("PlotUpgradeTransaction") then
@@ -1422,13 +1472,20 @@ task.spawn(function()
                         local floorName = "Floor " .. i
                         local serverFloorName = "Floor" .. i
                         if activeFloors[floorName] then
+                            local floorObj = cachedPlot:FindFirstChild(serverFloorName) or cachedPlot
                             if upgYield then
-                                rsRemotes.PlotUpgradeTransaction:InvokeServer("ExtraYield", serverFloorName)
-                                task.wait(0.2)
+                                local price = getUpgradePriceIn(floorObj, "Saw Yield")
+                                if getPlayerCash() >= price then
+                                    rsRemotes.PlotUpgradeTransaction:InvokeServer("ExtraYield", serverFloorName)
+                                    task.wait(0.2)
+                                end
                             end
                             if upgPower then
-                                rsRemotes.PlotUpgradeTransaction:InvokeServer("ExtraPower", serverFloorName)
-                                task.wait(0.2)
+                                local price = getUpgradePriceIn(floorObj, "Sprinkler Power")
+                                if getPlayerCash() >= price then
+                                    rsRemotes.PlotUpgradeTransaction:InvokeServer("ExtraPower", serverFloorName)
+                                    task.wait(0.2)
+                                end
                             end
                         end
                     end
@@ -2568,8 +2625,12 @@ task.spawn(function()
                     if (plotFolder:IsA("Folder") or plotFolder:IsA("Model")) and plotFolder.Name == "FarmPlot" then
                         for _, child in ipairs(plotFolder:GetChildren()) do
                             if child:GetAttribute("Unlocked") == false and child:FindFirstChild("Dirt") then
-                                UnlockPlotEvent:FireServer(child.Dirt)
-                                createNotification("Plot Expanded", "Unlocked a new garden tile.")
+                                local price = getUpgradePriceIn(child, "Unlock")
+                                if price == math.huge then price = getUpgradePriceIn(child, "") end 
+                                if getPlayerCash() >= price then
+                                    UnlockPlotEvent:FireServer(child.Dirt)
+                                    createNotification("Plot Expanded", "Unlocked a new garden tile.")
+                                end
                             end
                         end
                     end
